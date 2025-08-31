@@ -1,5 +1,7 @@
+"use client";
 import UploadButton from "@/app/_components/upload-button";
 import RenewalCalendar from "@/app/_components/renewal-calendar";
+import { useState } from "react";
 
 export default function Home() {
   const renewalEvents = [
@@ -13,11 +15,40 @@ export default function Home() {
     {
       vendor: "Vendor B",
       effectiveDate: "2023-02-01",
-      renewalDate: "2024-02-01",
+      renewalDate: "2025-09-01",
       autoRenew: false,
       amount: 2000,
     },
   ];
+
+  async function handleButtonClick() {
+    console.log("Button clicked");
+    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization:
+          "Bearer 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",
+        "HTTP-Referer": "<YOUR_SITE_URL>", // Optional. Site URL for rankings on openrouter.ai.
+        "X-Title": "<YOUR_SITE_NAME>", // Optional. Site title for rankings on openrouter.ai.
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "openai/gpt-4o",
+        messages: [
+          {
+            role: "user",
+            content: "What is the meaning of life?",
+          },
+        ],
+      }),
+    });
+
+    // Parse the JSON response
+    const data = await res.json();
+
+    // The API returns an array of choices
+    console.log("Full response:", data);
+  }
 
   return (
     <>
@@ -31,6 +62,8 @@ export default function Home() {
       <div>
         <RenewalCalendar renewalEvents={renewalEvents} />
       </div>
+
+      <button onClick={handleButtonClick}>Test OpenRouter API</button>
     </>
   );
 }

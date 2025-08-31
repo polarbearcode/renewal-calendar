@@ -1,5 +1,6 @@
 "use client";
-import { useRef } from "react";
+import { Dispatch, useRef } from "react";
+import { uploadToS3 } from "../lib/api";
 
 // Component for uploading PDF files button
 export default function UploadButton() {
@@ -10,10 +11,10 @@ export default function UploadButton() {
   };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
+    const files: FileList | null = event.target.files;
     if (files && files.length > 0) {
-      console.log("Selected files:");
-      Array.from(files).forEach((file) => console.log(file.name));
+      uploadToS3(files);
+      parseFiles(files);
     }
   };
 
