@@ -1,5 +1,5 @@
-"use server";
 export async function uploadToS3(fileList: FileList) {
+  console.log("xyz");
   const formData = new FormData();
   Array.from(fileList).forEach((file) => {
     formData.append("file", file);
@@ -9,9 +9,6 @@ export async function uploadToS3(fileList: FileList) {
     const response = await fetch("http://localhost:8080/upload", {
       method: "POST",
       body: formData,
-      headers: {
-        "X-Upload-Timestamp": new Date().toISOString(),
-      },
     });
     if (!response.ok) {
       throw new Error("Failed to upload files");
@@ -24,16 +21,21 @@ export async function uploadToS3(fileList: FileList) {
 export async function parseFiles(fileList: FileList) {
   // make a map of files -> bytes
 
-  const fileMap = new Map<File, string>();
+  const fileMap = new Map<string, string>();
 
   for (const file of fileList) {
     const arrayBuffer = await file.arrayBuffer();
     const bytes = new Uint8Array(arrayBuffer);
-    fileMap.set(file, bytesToBase64(bytes));
+    fileMap.set(file.name, bytesToBase64(bytes));
   }
 
   const fileMapObj = Object.fromEntries(fileMap);
-  const fileMapJSON = JSON.stringify(fileMapObj);
+
+  const payload = {
+    fileBytesMap: fileMapObj,
+  };
+
+  const fileMapJSON = JSON.stringify(payload);
 
   try {
     const response = await fetch("http://localhost:8080/parse", {
