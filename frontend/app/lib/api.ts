@@ -24,11 +24,12 @@ export async function uploadToS3(fileList: FileList) {
 export async function parseFiles(fileList: FileList) {
   // make a map of files -> bytes
 
-  const fileMap = new Map<File, Uint8Array>();
+  const fileMap = new Map<File, string>();
 
   for (const file of fileList) {
     const arrayBuffer = await file.arrayBuffer();
-    fileMap.set(file, new Uint8Array(arrayBuffer));
+    const bytes = new Uint8Array(arrayBuffer);
+    fileMap.set(file, bytesToBase64(bytes));
   }
 
   const fileMapObj = Object.fromEntries(fileMap);
@@ -43,6 +44,7 @@ export async function parseFiles(fileList: FileList) {
       body: fileMapJSON,
     });
     if (!response.ok) {
+      console.log(response.status);
       throw new Error("Failed to parse files");
     }
 
@@ -51,4 +53,12 @@ export async function parseFiles(fileList: FileList) {
   } catch (error) {
     console.log("Error with parsing:", error);
   }
+}
+
+function bytesToBase64(bytes: Uint8Array) {
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
 }
