@@ -1,6 +1,6 @@
 "use client";
 import { Dispatch, useRef } from "react";
-import { uploadToS3 } from "../lib/api";
+import { uploadToS3, parseFiles } from "../lib/api";
 
 // Component for uploading PDF files button
 export default function UploadButton() {
