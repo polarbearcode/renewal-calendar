@@ -10,11 +10,13 @@ export default function UploadButton() {
     fileInputRef.current?.click();
   };
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
     const files: FileList | null = event.target.files;
     if (files && files.length > 0) {
-      uploadToS3(files);
-      parseFiles(files);
+      await uploadToS3(files);
+      await parseFiles(files);
     }
   };
 
