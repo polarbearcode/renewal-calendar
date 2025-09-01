@@ -8,8 +8,11 @@ import (
     "net/http"
     "os"
     "strings"
+	"log"
+	"regexp"
 
     "github.com/ledongthuc/pdf"
+	"github.com/supabase-community/supabase-go"
 )
 
 // Struct for incoming JSON payload
@@ -59,19 +62,16 @@ func ParseHandler(w http.ResponseWriter, r *http.Request) {
         http.Error(w, "Failed to parse JSON: "+err.Error(), http.StatusBadRequest)
         return
     }
-
-	fmt.Println(payload)
-
     var allText strings.Builder
     for filename, b64 := range payload.FileBytesMap {
         fileBytes, err := base64.StdEncoding.DecodeString(b64)
-		fmt.Println(66)
+	
         if err != nil {
             fmt.Println("Failed to decode Base64 for", filename, err)
             continue
         }
 
-		fmt.Println(72)
+	
 
         text, err := extractTextFromPDFBytes(fileBytes)
         if err != nil {
@@ -79,7 +79,6 @@ func ParseHandler(w http.ResponseWriter, r *http.Request) {
             continue
         }
 
-		fmt.Println(80)
 
         allText.WriteString("\n---\n")
         allText.WriteString(fmt.Sprintf("File: %s\n", filename))
@@ -101,7 +100,7 @@ func ParseHandler(w http.ResponseWriter, r *http.Request) {
     chatReq := map[string]interface{}{
         "model": "deepseek/deepseek-r1:free", // or whichever model you want
         "messages": []map[string]string{
-            {"role": "user", "content": allText.String()},
+            {"role": "user", "content": "Give me the seller name, effective date, renewal date, and whether this contract auto renews in a very parsable string like name: ..., effective date: ... renewal-date: .... autorenew: yes/no that I can easily parse with a regex" + allText.String()},
         },
     }
 
@@ -112,11 +111,11 @@ func ParseHandler(w http.ResponseWriter, r *http.Request) {
     req.Header.Set("Authorization", "Bearer "+apiKey)
     req.Header.Set("Content-Type", "application/json")
 
-	fmt.Println(108)
+	
 
     client := &http.Client{}
 
-	fmt.Println(112)
+	
 
 	
     resp, err := client.Do(req)
@@ -129,8 +128,76 @@ func ParseHandler(w http.ResponseWriter, r *http.Request) {
     defer resp.Body.Close()
     respBody, _ := ioutil.ReadAll(resp.Body)
 
-	fmt.Println("OpenAI response:", string(respBody))
+	responseMap, _ := responseToMap(respBody)
+
+
+
+
+	fmt.Println(responseMap)
 
     w.Header().Set("Content-Type", "application/json")
     w.Write(respBody)
+}
+
+func responseToMap(respBody []byte) (map[string]interface{}, error) {
+
+	type Response struct {
+    	choices string `json:"choices"`
+    	// Add other fields as needed
+	}
+
+	type ChatResponse struct {
+		Choices []struct {
+			Message struct {
+				Role    string `json:"role"`
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+
+	var parsedResp ChatResponse
+	if err := json.Unmarshal(respBody, &parsedResp); err != nil {
+		fmt.Println("here")
+		log.Fatalf("Failed to parse JSON: %v", err)
+	}
+
+	fmt.Println("Parsed response:", parsedResp.Choices[0].Message.Content)
+	fmt.Println("Woo")
+
+	re := regexp.MustCompile(`(?s)name:\s*(.+?)[,\n]\s*effective date:\s*(.+?)[,\n]\s*renewal-date:\s*(.+?)[,\n]\s*autorenew:\s*(\w+)`)
+
+    matches := re.FindStringSubmatch(parsedResp.Choices[0].Message.Content)
+
+	fmt.Println("Parsed response:", matches)
+
+	return map[string]interface{}{
+		"name":          matches[1],
+		"effective_date": matches[2],
+		"renewal_date":  matches[3],
+		"autorenew":     matches[4],
+	}, nil
+}
+
+func sendMapToDB(data map[string]interface{}) error {
+
+	apiURL := os.Getenv("API_URL")
+	apiKey := os.Getenv("API_KEY")
+	client := supabase.NewClient(apiURL, apiKey, &supabase.ClientOptions{})
+
+	mappedData := map[string]interface{} {
+		"name":          data["name"],
+		"effective_date": data["effective_date"],
+		"renewal_date":  data["renewal_date"],
+		"autorenew":     data["autorenew"],
+	}
+
+
+
+	// Insert the data into the "contracts" table
+	_, err := client.From("contracts").Insert(data).Execute()
+	if err != nil {
+		return fmt.Errorf("failed to insert data into Supabase: %w", err)
+	}
+
+	return nil
 }
