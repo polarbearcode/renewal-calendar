@@ -12,7 +12,7 @@ import (
 func enableCORS(w http.ResponseWriter, r *http.Request) bool {
     w.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000") // or "*" for all origins
     w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
-    w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Upload-Timestamp")
+    w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 
     if r.Method == http.MethodOptions {
         // Preflight request, return OK without further handling
@@ -52,8 +52,6 @@ func UploadHandler(w http.ResponseWriter, r *http.Request) {
     }
 
 	uploadToS3(w, r, files)
-
-	services.ParseFiles(w, files)
 }
 
 func uploadToS3(w http.ResponseWriter, r *http.Request, files []*multipart.FileHeader) {

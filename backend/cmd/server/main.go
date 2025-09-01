@@ -26,7 +26,7 @@ func main() {
     mux := http.NewServeMux()
 
     mux.HandleFunc("/upload", handlers.UploadHandler)
-
+	mux.HandleFunc("/parse", handlers.ParseHandler)
 
     fmt.Println("🚀 Server running on :8080")
     log.Fatal(http.ListenAndServe(":8080", mux))
