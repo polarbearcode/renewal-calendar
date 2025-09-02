@@ -1,3 +1,5 @@
+import { VendorContract } from "./definitions";
+
 export async function uploadToS3(fileList: FileList) {
   console.log("xyz");
   const formData = new FormData();
@@ -63,4 +65,22 @@ function bytesToBase64(bytes: Uint8Array) {
     binary += String.fromCharCode(bytes[i]);
   }
   return btoa(binary);
+}
+
+export async function fetchCalendarData() {
+  try {
+    const response = await fetch("http://localhost:8080/calendarData", {
+      method: "GET",
+    });
+    if (!response.ok) {
+      throw new Error("Failed to fetch calendar data");
+    }
+
+    const data: VendorContract[] = await response.json();
+    console.log("Fetched calendar data:", data);
+    return data;
+  } catch (error) {
+    console.log("Error fetching calendar data:", error);
+    return [];
+  }
 }
