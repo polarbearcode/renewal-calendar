@@ -10,6 +10,7 @@ export default function RenewalCalendar({
 }: {
   renewalEvents: Array<VendorContract>;
 }) {
+  console.log("Rendering RenewalCalendar with events:", renewalEvents);
   return (
     <>
       <div className="calendar-wrapper w-[900px] mx-auto border rounded-lg shadow p-4 m-2 [&_.fc]:w-full [&_.fc-scrollgrid]:w-full">
@@ -18,7 +19,10 @@ export default function RenewalCalendar({
           initialView="dayGridMonth"
           height="500px"
           events={renewalEvents.map((contract: VendorContract) => {
-            return { title: contract.vendor, date: contract.renewalDate };
+            return {
+              title: contract.seller,
+              date: new Date(contract.renewal_date).toISOString().split("T")[0],
+            };
           })}
         />
       </div>
