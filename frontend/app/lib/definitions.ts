@@ -1,7 +1,6 @@
 export type VendorContract = {
-  vendor: string;
-  effectiveDate: string;
-  renewalDate: string;
-  autoRenew: boolean;
-  amount: number;
+  seller: string;
+  effective_date: string;
+  renewal_date: string;
+  autorenew: boolean;
 };
