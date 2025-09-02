@@ -130,10 +130,9 @@ func ParseHandler(w http.ResponseWriter, r *http.Request) {
 
 	responseMap, _ := responseToMap(respBody)
 
+	sendMapToDB(responseMap)
 
-
-
-	fmt.Println(responseMap)
+	fmt.Println("Response sent to database:", responseMap)
 
     w.Header().Set("Content-Type", "application/json")
     w.Write(respBody)
@@ -180,24 +179,50 @@ func responseToMap(respBody []byte) (map[string]interface{}, error) {
 
 func sendMapToDB(data map[string]interface{}) error {
 
+	type Contract struct {
+		Name          string `json:"seller"`
+		EffectiveDate string `json:"effective_date"`
+		RenewalDate   string `json:"renewal_date"`
+		Autorenew     bool `json:"autorenew"`
+	}
+
+	contract := Contract{
+		Name:          data["name"].(string),
+		EffectiveDate: data["effective_date"].(string),
+		RenewalDate:   data["renewal_date"].(string),
+	}
+
+	
+	contract_autorenew := data["autorenew"]
+
+	if strings.Contains(strings.ToLower(contract_autorenew.(string)), "yes") {
+		contract.Autorenew = true
+	} else {
+		contract.Autorenew = false
+	}
+
 	apiURL := os.Getenv("API_URL")
 	apiKey := os.Getenv("API_KEY")
-	client := supabase.NewClient(apiURL, apiKey, &supabase.ClientOptions{})
-
-	mappedData := map[string]interface{} {
-		"name":          data["name"],
-		"effective_date": data["effective_date"],
-		"renewal_date":  data["renewal_date"],
-		"autorenew":     data["autorenew"],
-	}
-
-
-
-	// Insert the data into the "contracts" table
-	_, err := client.From("contracts").Insert(data).Execute()
+	client, err := supabase.NewClient(apiURL, apiKey, &supabase.ClientOptions{})
 	if err != nil {
-		return fmt.Errorf("failed to insert data into Supabase: %w", err)
+		return fmt.Errorf("failed to create Supabase client: %w", err)
 	}
+
+	
+
+	res, count, err := client.From("contracts").Insert(
+		[]Contract{contract}, // must still be a slice
+		false,                // upsert?
+		"",                   // onConflict
+		"representation",     // returning ("representation" or "minimal")
+		"",                   // count
+	).Execute()
+
+	if err != nil {
+		log.Fatalf("failed to insert: %v", err)
+	}
+
+	fmt.Println(count, string(res)) // response from Supabase
 
 	return nil
 }
