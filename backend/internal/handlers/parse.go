@@ -10,6 +10,9 @@ import (
     "strings"
 	"log"
 	"regexp"
+	"time"
+	"io"
+	"strconv"
 
     "github.com/ledongthuc/pdf"
 	"github.com/supabase-community/supabase-go"
@@ -63,6 +66,9 @@ func ParseHandler(w http.ResponseWriter, r *http.Request) {
         return
     }
     var allText strings.Builder
+
+	
+
     for filename, b64 := range payload.FileBytesMap {
         fileBytes, err := base64.StdEncoding.DecodeString(b64)
 	
@@ -115,27 +121,28 @@ func ParseHandler(w http.ResponseWriter, r *http.Request) {
 
     client := &http.Client{}
 
-	
 
-	
-    resp, err := client.Do(req)
+	//resp, err := client.Do(req)
+    resp, err := callOpenRouterWithRetry(req, 3, client)
     if err != nil {
 		fmt.Println(err)
         http.Error(w, "Error calling OpenAI API: "+err.Error(), http.StatusInternalServerError)
         return
     }
 
-    defer resp.Body.Close()
-    respBody, _ := ioutil.ReadAll(resp.Body)
+	fmt.Println("Woo", resp)
 
-	responseMap, _ := responseToMap(respBody)
+    //defer resp.Body.Close()
+    //respBody, _ := ioutil.ReadAll(resp.Body)
+
+	responseMap, _ := responseToMap(resp)
 
 	sendMapToDB(responseMap)
 
 	fmt.Println("Response sent to database:", responseMap)
 
     w.Header().Set("Content-Type", "application/json")
-    w.Write(respBody)
+    w.Write(resp)
 }
 
 func responseToMap(respBody []byte) (map[string]interface{}, error) {
@@ -153,6 +160,8 @@ func responseToMap(respBody []byte) (map[string]interface{}, error) {
 			} `json:"message"`
 		} `json:"choices"`
 	}
+
+	fmt.Println("Here: ", respBody)
 
 	var parsedResp ChatResponse
 	if err := json.Unmarshal(respBody, &parsedResp); err != nil {
@@ -225,4 +234,44 @@ func sendMapToDB(data map[string]interface{}) error {
 	fmt.Println(count, string(res)) // response from Supabase
 
 	return nil
+}
+
+func callOpenRouterWithRetry(req *http.Request, maxRetries int, client *http.Client) ([]byte, error) {
+    var resp *http.Response
+    var err error
+
+    for attempt := 0; attempt <= maxRetries; attempt++ {
+        resp, err = client.Do(req)
+        if err != nil {
+            return nil, fmt.Errorf("request failed: %w", err)
+        }
+
+        if resp.StatusCode == http.StatusTooManyRequests { // 429
+            retryAfter := 5 * time.Second // default wait
+            if ra := resp.Header.Get("Retry-After"); ra != "" {
+                if sec, parseErr := strconv.Atoi(ra); parseErr == nil {
+                    retryAfter = time.Duration(sec) * time.Second
+                }
+            }
+            fmt.Printf("Hit rate limit, retrying after %v...\n", retryAfter)
+            resp.Body.Close()
+            time.Sleep(retryAfter)
+            continue
+        }
+
+        // Success or other error
+        defer resp.Body.Close()
+        body, readErr := io.ReadAll(resp.Body)
+        if readErr != nil {
+            return nil, fmt.Errorf("read body failed: %w", readErr)
+        }
+
+        if resp.StatusCode >= 400 {
+            return nil, fmt.Errorf("request failed with status %d: %s", resp.StatusCode, body)
+        }
+
+        return body, nil
+    }
+
+    return nil, fmt.Errorf("exceeded max retries (%d) due to rate limiting", maxRetries)
 }
