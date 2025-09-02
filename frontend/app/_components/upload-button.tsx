@@ -1,9 +1,14 @@
 "use client";
-import { Dispatch, useRef } from "react";
-import { uploadToS3, parseFiles } from "../lib/api";
+import { Dispatch, SetStateAction, useRef } from "react";
+import { uploadToS3, parseFiles, fetchCalendarData } from "../lib/api";
+import { VendorContract } from "../lib/definitions";
 
 // Component for uploading PDF files button
-export default function UploadButton() {
+export default function UploadButton({
+  setRenewalEvents,
+}: {
+  setRenewalEvents: Dispatch<SetStateAction<VendorContract[]>>;
+}) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const handleButtonClick = () => {
@@ -17,6 +22,8 @@ export default function UploadButton() {
     if (files && files.length > 0) {
       await uploadToS3(files);
       await parseFiles(files);
+      const data = await fetchCalendarData();
+      setRenewalEvents(data);
     }
   };
 
