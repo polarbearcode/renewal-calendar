@@ -93,7 +93,10 @@ export async function fetchCalendarData() {
       method: "GET",
     });
     if (!response.ok) {
-      throw new Error("Failed to fetch calendar data");
+      const errorText = await response.text();
+      throw new Error(
+        `Failed to fetch calendar data ${response.status} ${errorText}`,
+      );
     }
 
     const data: VendorContract[] = await response.json();
