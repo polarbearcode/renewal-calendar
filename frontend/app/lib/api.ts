@@ -4,6 +4,8 @@ import { VendorContract } from "./definitions";
  * Uploads a list of files to S3.
  * @param fileList The list of files to upload.
  */
+
+const baseURL = process.env.GATEWAY_API_URL || "http://localhost:8080";
 export async function uploadToS3(fileList: FileList) {
   const formData = new FormData();
   Array.from(fileList).forEach((file) => {
@@ -11,7 +13,7 @@ export async function uploadToS3(fileList: FileList) {
   });
 
   try {
-    const response = await fetch("http://localhost:8080/upload", {
+    const response = await fetch(`${baseURL}/upload`, {
       method: "POST",
       body: formData,
     });
@@ -48,7 +50,7 @@ export async function parseFiles(fileList: FileList) {
   const fileMapJSON = JSON.stringify(payload);
 
   try {
-    const response = await fetch("http://localhost:8080/parse", {
+    const response = await fetch(`${baseURL}/parse`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -86,7 +88,7 @@ function bytesToBase64(bytes: Uint8Array) {
  */
 export async function fetchCalendarData() {
   try {
-    const response = await fetch("http://localhost:8080/calendarData", {
+    const response = await fetch(`${baseURL}/calendarData`, {
       method: "GET",
     });
     if (!response.ok) {
