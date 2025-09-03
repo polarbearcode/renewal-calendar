@@ -103,7 +103,7 @@ export async function fetchCalendarData() {
     const data: VendorContract[] = await response.json();
     console.log("Fetched calendar data:", data);
     return data;
-  } catch (error: any) {
+  } catch (error) {
     console.log("Error fetching calendar data:", (error as Error).message);
     return [];
   }
