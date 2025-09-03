@@ -92,6 +92,7 @@ export async function fetchCalendarData() {
     const response = await fetch(`${baseURL}/calendarData`, {
       method: "GET",
     });
+
     if (!response.ok) {
       const errorText = await response.text();
       throw new Error(
@@ -102,8 +103,8 @@ export async function fetchCalendarData() {
     const data: VendorContract[] = await response.json();
     console.log("Fetched calendar data:", data);
     return data;
-  } catch (error) {
-    console.log("Error fetching calendar data:", error);
+  } catch (error: any) {
+    console.log("Error fetching calendar data:", (error as Error).message);
     return [];
   }
 }
