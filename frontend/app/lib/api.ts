@@ -5,7 +5,8 @@ import { VendorContract } from "./definitions";
  * @param fileList The list of files to upload.
  */
 
-const baseURL = process.env.GATEWAY_API_URL || "http://localhost:8080";
+const baseURL =
+  process.env.NEXT_PUBLIC_GATEWAY_API_URL || "http://localhost:8080";
 export async function uploadToS3(fileList: FileList) {
   const formData = new FormData();
   Array.from(fileList).forEach((file) => {
