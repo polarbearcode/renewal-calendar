@@ -24,3 +24,49 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1rem;
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  font-size: 0.95rem;
+  background: #ffffff;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  padding: 20px;
+  margin-bottom: 1rem;
+}
+
+thead {
+  background: #f5f7fa;
+}
+
+th,
+td {
+  padding: 12px 16px;
+  text-align: left;
+}
+
+th {
+  font-weight: 600;
+  color: #333;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+td {
+  border-bottom: 1px solid #f0f0f0;
+  color: #444;
+}
+
+tr:hover {
+  background: #f9fafb;
+  transition: background 0.2s ease-in-out;
+}
+
+.table-container {
+  padding: 0 2rem; /* Adjust left/right spacing */
+  max-width: 1000px; /* Optional: keep it from stretching too wide */
+  margin: 0 auto; /* Center it nicely */
+}
