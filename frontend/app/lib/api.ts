@@ -1,7 +1,10 @@
 import { VendorContract } from "./definitions";
 
+/**
+ * Uploads a list of files to S3.
+ * @param fileList The list of files to upload.
+ */
 export async function uploadToS3(fileList: FileList) {
-  console.log("xyz");
   const formData = new FormData();
   Array.from(fileList).forEach((file) => {
     formData.append("file", file);
@@ -20,6 +23,11 @@ export async function uploadToS3(fileList: FileList) {
   }
 }
 
+/**
+ * Parses the uploaded PDF files to extract seller, effective date, renewal date,
+ * and whether contract autorenews. Handled by backend API and uploads to database.
+ * @param fileList The list of files to parse.
+ */
 export async function parseFiles(fileList: FileList) {
   // make a map of files -> bytes
 
@@ -59,6 +67,11 @@ export async function parseFiles(fileList: FileList) {
   }
 }
 
+/**
+ * Converts a byte array to a base64 string.
+ * @param bytes The byte array to convert.
+ * @returns The base64-encoded string.
+ */
 function bytesToBase64(bytes: Uint8Array) {
   let binary = "";
   for (let i = 0; i < bytes.length; i++) {
@@ -67,6 +80,10 @@ function bytesToBase64(bytes: Uint8Array) {
   return btoa(binary);
 }
 
+/**
+ * Fetches calendar data from the backend API to display.
+ * @returns An array of VendorContract objects.
+ */
 export async function fetchCalendarData() {
   try {
     const response = await fetch("http://localhost:8080/calendarData", {
