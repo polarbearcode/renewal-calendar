@@ -36,7 +36,7 @@ export default function UploadButton({
     if (files && files.length > 0) {
       try {
         setLoading(true);
-        await uploadToS3(files);
+        //await uploadToS3(files);
         await parseFiles(files);
         const data = await fetchCalendarData();
         setRenewalEvents(data);
