@@ -11,11 +11,13 @@ import (
 	"log"
 	"regexp"
 	"time"
-	"io"
 	"strconv"
+	"context"
+	"bytes"
 
     "github.com/ledongthuc/pdf"
 	"github.com/supabase-community/supabase-go"
+	"golang.org/x/time/rate"
 )
 
 // Struct for incoming JSON payload
@@ -24,19 +26,17 @@ type UploadPayload struct {
 }
 
 func extractTextFromPDFBytes(fileBytes []byte) (string, error) {
-    tmpFile := "temp.pdf"
-    if err := ioutil.WriteFile(tmpFile, fileBytes, 0644); err != nil {
-        return "", err
-    }
+    reader := bytes.NewReader(fileBytes)
 
-    _, pdfReader, err := pdf.Open(tmpFile)
+    // Open PDF from memory instead of file
+    pdfReader, err := pdf.NewReader(reader, int64(len(fileBytes)))
     if err != nil {
         return "", err
     }
 
     var text strings.Builder
     numPages := pdfReader.NumPage()
-    for i := 1; i <= numPages; i++ { // Pages are 1-indexed
+    for i := 1; i <= numPages; i++ {
         page := pdfReader.Page(i)
         pageText, err := page.GetPlainText(nil)
         if err != nil {
@@ -49,100 +49,103 @@ func extractTextFromPDFBytes(fileBytes []byte) (string, error) {
     return text.String(), nil
 }
 
+type FileResult struct {
+    Filename string `json:"filename"`
+    Success  bool   `json:"success"`
+    Data     string `json:"data,omitempty"`
+    Error    string `json:"error,omitempty"`
+}
+
 func ParseHandler(w http.ResponseWriter, r *http.Request) {
-
+	log.Printf("ParseHandler reached! Method=%s Path=%s", r.Method, r.URL.Path)
 	if !enableCORS(w, r) {
-        return
-    }
+		return
+	}
 
-    if r.Method != http.MethodPost {
-        http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-        return
-    }
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 
-    var payload UploadPayload
-    if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-        http.Error(w, "Failed to parse JSON: "+err.Error(), http.StatusBadRequest)
-        return
-    }
-    var allText strings.Builder
+	var payload UploadPayload
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "Failed to parse JSON: "+err.Error(), http.StatusBadRequest)
+		return
+	}
 
-	
+	apiKey := strings.TrimSpace(os.Getenv("OPENAI_API_KEY"))
+	if apiKey == "" {
+		http.Error(w, "OPENAI_API_KEY not set", http.StatusInternalServerError)
+		return
+	}
 
-    for filename, b64 := range payload.FileBytesMap {
-        fileBytes, err := base64.StdEncoding.DecodeString(b64)
-	
-        if err != nil {
-            fmt.Println("Failed to decode Base64 for", filename, err)
-            continue
-        }
+	client := &http.Client{}
+	// Limit to 1 request every 2 seconds
+	limiter := rate.NewLimiter(rate.Every(2*time.Second), 1)
 
-	
-
-        text, err := extractTextFromPDFBytes(fileBytes)
-        if err != nil {
-            fmt.Println("Failed to extract text from", filename, err)
-            continue
-        }
-
-
-        allText.WriteString("\n---\n")
-        allText.WriteString(fmt.Sprintf("File: %s\n", filename))
-        allText.WriteString(text)
-    }
-
-
-
-    // Now send allText.String() to OpenAI Chat API
-    apiKey := strings.TrimSpace(os.Getenv("OPENAI_API_KEY"))
-    if apiKey == "" {
-        http.Error(w, "OPENAI_API_KEY not set", http.StatusInternalServerError)
-        return
-    }
+	results := make(map[string]map[string]interface{})
 
 	
 
-    // Prepare OpenRouter Chat API request
-    chatReq := map[string]interface{}{
-        "model": "deepseek/deepseek-r1:free", // or whichever model you want
-        "messages": []map[string]string{
-            {"role": "user", "content": "Give me the seller name, effective date, renewal date, and whether this contract auto renews in a very parsable string like name: ..., effective date: ... renewal-date: .... autorenew: yes/no that I can easily parse with a regex" + allText.String()},
-        },
-    }
+	for filename, b64 := range payload.FileBytesMap {
+		fileBytes, err := base64.StdEncoding.DecodeString(b64)
+		if err != nil {
+			fmt.Println("Failed to decode Base64 for", filename, err)
+			continue
+		}
 
+		text, err := extractTextFromPDFBytes(fileBytes)
+		if err != nil {
+			fmt.Println("Failed to extract text from", filename, err)
+			continue
+		}
 
+		// Wait for rate limiter before sending API request
+		if err := limiter.Wait(context.Background()); err != nil {
+			fmt.Println("Rate limiter error:", err)
+			continue
+		}
 
-    bodyBytes, _ := json.Marshal(chatReq)
-    req, _ := http.NewRequest("POST", "https://openrouter.ai/api/v1/chat/completions", strings.NewReader(string(bodyBytes)))
-    req.Header.Set("Authorization", "Bearer "+apiKey)
-    req.Header.Set("Content-Type", "application/json")
+		chatReq := map[string]interface{}{
+			"model": "deepseek/deepseek-r1:free",
+			"messages": []map[string]string{
+				{
+					"role":    "user",
+					"content": fmt.Sprintf("Give me the seller name, effective date, renewal date, and whether this contract auto renews in a very parsable string for this file:\n---\n%s", text),
+				},
+			},
+		}
 
-	
+		bodyBytes, _ := json.Marshal(chatReq)
+		req, _ := http.NewRequest("POST", "https://openrouter.ai/api/v1/chat/completions", strings.NewReader(string(bodyBytes)))
+		req.Header.Set("Authorization", "Bearer "+apiKey)
+		req.Header.Set("Content-Type", "application/json")
 
-    client := &http.Client{}
+		respBody, err := callOpenRouterWithRetry(req, 3, client)
+		if err != nil {
+			fmt.Println("API call failed for", filename, err)
+			continue
+		}
 
+		fmt.Println("Here", respBody)
 
-	//resp, err := client.Do(req)
-    resp, err := callOpenRouterWithRetry(req, 3, client)
-    if err != nil {
-		fmt.Println(err)
-        http.Error(w, "Error calling OpenAI API: "+err.Error(), http.StatusInternalServerError)
-        return
-    }
+		responseMap, err := responseToMap(respBody)
+		
+		if err != nil {
+			fmt.Println("Failed to parse response for", filename, err)
+			continue
+		}
 
-	fmt.Println("Woo", resp)
+		results[filename] = responseMap
 
-    //defer resp.Body.Close()
-    //respBody, _ := ioutil.ReadAll(resp.Body)
+		// Optionally send each file’s parsed result to the database
+		sendMapToDB(responseMap)
+		fmt.Println("Processed file:", filename)
+	}
 
-	responseMap, _ := responseToMap(resp)
-
-	sendMapToDB(responseMap)
-
-	fmt.Println("Response sent to database:", responseMap)
-
-    w.Header().Set("Content-Type", "application/json")
-    w.Write(resp)
+	// Return combined results for all files
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(results)
 }
 
 func responseToMap(respBody []byte) (map[string]interface{}, error) {
@@ -172,11 +175,15 @@ func responseToMap(respBody []byte) (map[string]interface{}, error) {
 	fmt.Println("Parsed response:", parsedResp.Choices[0].Message.Content)
 	fmt.Println("Woo")
 
-	re := regexp.MustCompile(`(?s)name:\s*(.+?)[,\n]\s*effective date:\s*(.+?)[,\n]\s*renewal-date:\s*(.+?)[,\n]\s*autorenew:\s*(\w+)`)
+	re := regexp.MustCompile(`(?i)(?:name|seller_name|seller name):\s*(.+?)\s*(?:,|;|\||\n)\s*(?:effective date|effective_date|Effective Date):\s*(.+?)\s*(?:,|;|\||\n)\s*(?:renewal[-_ ]?date):\s*(.+?)\s*(?:,|;|\||\n)\s*(?:autorenew|auto_renew|auto_renews):\s*(\w+)`)
 
     matches := re.FindStringSubmatch(parsedResp.Choices[0].Message.Content)
 
 	fmt.Println("Parsed response:", matches)
+
+	if len(matches) < 5 {
+		return nil, fmt.Errorf("failed to parse response")
+	}
 
 	return map[string]interface{}{
 		"name":          matches[1],
@@ -237,41 +244,36 @@ func sendMapToDB(data map[string]interface{}) error {
 }
 
 func callOpenRouterWithRetry(req *http.Request, maxRetries int, client *http.Client) ([]byte, error) {
-    var resp *http.Response
-    var err error
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		resp, err := client.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("request failed: %w", err)
+		}
 
-    for attempt := 0; attempt <= maxRetries; attempt++ {
-        resp, err = client.Do(req)
-        if err != nil {
-            return nil, fmt.Errorf("request failed: %w", err)
-        }
+		bodyBytes, _ := ioutil.ReadAll(resp.Body)
+		resp.Body.Close()
 
-        if resp.StatusCode == http.StatusTooManyRequests { // 429
-            retryAfter := 5 * time.Second // default wait
-            if ra := resp.Header.Get("Retry-After"); ra != "" {
-                if sec, parseErr := strconv.Atoi(ra); parseErr == nil {
-                    retryAfter = time.Duration(sec) * time.Second
-                }
-            }
-            fmt.Printf("Hit rate limit, retrying after %v...\n", retryAfter)
-            resp.Body.Close()
-            time.Sleep(retryAfter)
-            continue
-        }
+		// Retry if rate-limited
+		if resp.StatusCode == http.StatusTooManyRequests { // 429
+			retryAfter := 5 * time.Second // default
+			if ra := resp.Header.Get("Retry-After"); ra != "" {
+				if sec, parseErr := strconv.Atoi(ra); parseErr == nil {
+					retryAfter = time.Duration(sec) * time.Second
+				}
+			}
+			fmt.Printf("429 received, retrying after %v...\n", retryAfter)
+			time.Sleep(retryAfter)
+			continue
+		}
 
-        // Success or other error
-        defer resp.Body.Close()
-        body, readErr := io.ReadAll(resp.Body)
-        if readErr != nil {
-            return nil, fmt.Errorf("read body failed: %w", readErr)
-        }
+		// If other errors, return with body for debugging
+		if resp.StatusCode >= 400 {
+			return nil, fmt.Errorf("OpenRouter API error %d: %s", resp.StatusCode, string(bodyBytes))
+		}
 
-        if resp.StatusCode >= 400 {
-            return nil, fmt.Errorf("request failed with status %d: %s", resp.StatusCode, body)
-        }
+		// Successful response
+		return bodyBytes, nil
+	}
 
-        return body, nil
-    }
-
-    return nil, fmt.Errorf("exceeded max retries (%d) due to rate limiting", maxRetries)
+	return nil, fmt.Errorf("exceeded max retries due to rate limiting")
 }

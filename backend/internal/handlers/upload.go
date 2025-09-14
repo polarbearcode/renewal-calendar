@@ -11,7 +11,7 @@ import (
 
 func enableCORS(w http.ResponseWriter, r *http.Request) bool {
     w.Header().Set("Access-Control-Allow-Origin", "https://renewal-calendar.vercel.app") // or "*" for all origins
-    w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
+    w.Header().Set("Access-Control-Allow-Methods", "POST, GET")
     w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 
     if r.Method == http.MethodOptions {

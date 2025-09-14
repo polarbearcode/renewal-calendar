@@ -1,3 +1,4 @@
 .env
 .env.local
 *.pdf
+!*05-versions-space.pdf

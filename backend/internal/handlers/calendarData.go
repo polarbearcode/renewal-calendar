@@ -5,10 +5,14 @@ import (
 	"fmt"
 	"github.com/supabase-community/supabase-go"
 	"os"
+	"log"
 
 )
 
 func CalendarDataHandler(w http.ResponseWriter, r *http.Request) {
+
+	    log.Printf("Received request: method=%s path=%s", r.Method, r.URL.Path)
+
 
 	if !enableCORS(w, r) {
 		return
@@ -25,14 +29,18 @@ func CalendarDataHandler(w http.ResponseWriter, r *http.Request) {
     client, err := supabase.NewClient(API_URL, API_KEY, &supabase.ClientOptions{})
 
 	if err != nil {
-		fmt.Println("cannot initalize client", err)
+		errorMessage := fmt.Sprintf("Failed to initialize Supabase client: %v", err)
+		http.Error(w, errorMessage, http.StatusInternalServerError)
+		log.Println(errorMessage)
+		return
 	}
 
-	data, count, err := client.From("contracts").Select("*", "exact", false).Execute()
+	data, _, err := client.From("contracts").Select("*", "exact", false).Execute()
 
 	if err != nil {
-		fmt.Println("failed to fetch data:", count, err)
-		http.Error(w, "Failed to fetch data", http.StatusInternalServerError)
+		errorMessage := fmt.Sprintf("Failed to fetch data from Supabase: %v", err)
+		http.Error(w, errorMessage, http.StatusInternalServerError)
+		log.Println(errorMessage)
 		return
 	}
 
